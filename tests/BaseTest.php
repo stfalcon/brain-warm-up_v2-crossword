@@ -77,7 +77,6 @@ AAAAA
 CROSSWORD
         ];
 
-
         $data[2] = [
             [
                 'PTC',
@@ -101,7 +100,6 @@ IXEJNDOP
 ...ZGPPC
 CROSSWORD
         ];
-
 
         $data[3] = [
             [
