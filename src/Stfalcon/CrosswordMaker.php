@@ -4,38 +4,51 @@ namespace Stfalcon;
 
 class CrosswordMaker {
 
+    static private $_combinations = array();
+
     public function generate($words)
     {
-//        var_dump(self::_bruteForce($words));
-//        exit;
-        return self::_bruteForce($words);
+        self::$_combinations = array();
+
+        usort($words, function($a, $b) {
+            if (strlen($a) == strlen($b)) {
+                return 0;
+            }
+            return (strlen($a) < strlen($b)) ? 1 : -1;
+        });
+
+        self::_bruteForce($words);
+
+        foreach(self::$_combinations as $combination) {
+            $crossword = self::_tryGenerate($combination);
+            if ($crossword) {
+                return $crossword;
+            }
+        }
+
+        return false;
     }
 
-    static private function _bruteForce($words, $pos = 0) {
-        if (count($words) == $pos-1) {
+    static private function _bruteForce($data, $pos = 0) {
+        if (count($data) == $pos-1) {
             return false;
         }
 
-        // пробуємо згенерувати кросворд для поточної комбінації
-        $crossword = self::_tryGenerate($words);
-        if ($crossword) {
-            return $crossword;
-        }
+        array_push(self::$_combinations, $data);
 
-        for($i = $pos; $i < count($words); $i++) {
-            $data = $words;
-            if (isset($words[$i+1])) {
-                $data[$pos] = $words[$i+1];
-                $data[$i+1] = $words[$pos];
+        for($i = $pos; $i < count($data); $i++) {
+            $dataCopy = $data;
+            if (isset($data[$i+1])) {
+                $dataCopy[$pos] = $data[$i+1];
+                $dataCopy[$i+1] = $data[$pos];
             }
 
-            return self::_bruteForce($data, $pos+1);
+            self::_bruteForce($dataCopy, $pos+1);
         }
     }
 
     static private function _tryGenerate($words) {
-//        echo implode($words,' ') . "\n";
-
+        // напрямок руху по матриці (зміщення для кожного слова)
         $direction = array(
             array(+1, 0),
             array(0, +1),
@@ -50,34 +63,43 @@ class CrosswordMaker {
         $y=0;
         $maxX = 0;
         $maxY = 0;
-        for($i = 0; $i < count($words); $i++) {
-            $word = $words[$i];
-            for($n = 0; $n < strlen($word); $n++) {
-                $num = ($direction[$i][0] < 0 || $direction[$i][1] < 0) ? strlen($word) - ($n+1) : $n;
 
-                if (isset($matrix[$x][$y]) && $matrix[$x][$y] != $word[$num]) {
+        for($wordId = 0; $wordId < count($words); $wordId++) {
+            $word = $words[$wordId];
+            for($letterId = 0; $letterId < strlen($word); $letterId++) {
+                // визначаємо номер літери, яку будемо прописувати в клітину (враховуємо зворотні напрямки)
+                $n = ($direction[$wordId][0] < 0 || $direction[$wordId][1] < 0) ? strlen($word) - ($letterId+1) : $letterId;
+
+                // якщо маршрут закінчився не там де почався (не в точці з координатами [0][0])
+                if ($wordId + 1 == count($words) && $letterId + 1 == strlen($word) && ($x != 0 || $y != 0)) {
                     return false;
                 }
 
-                $matrix[$x][$y] = $word[$num];
-                if ($n < strlen($word) - 1) {
-                    $x += $direction[$i][0];
-                    $maxX = $x > $maxX ? $x : $maxX;
+                // якщо в цій клітинці вже є літера, то вони мають співпадати
+                if (isset($matrix[$x][$y]) && $matrix[$x][$y] != $word[$n]) {
+                    return false;
+                }
 
-                    $y += $direction[$i][1];
+                // проставляємо нову літеру в матрицю
+                $matrix[$x][$y] = $word[$n];
+
+                // рахуємо координати наступної літери
+                if ($letterId < strlen($word) - 1) {
+                    $x += $direction[$wordId][0];
+                    $y += $direction[$wordId][1];
+
+                    // фіксуємо розміри матриці
+                    $maxX = $x > $maxX ? $x : $maxX;
                     $maxY = $y > $maxY ? $y: $maxY;
                 }
             }
         }
 
+        // рендеримо кросворд
         ob_start();
         for ($x = 0; $x <= $maxX; $x++) {
             for ($y = 0; $y <= $maxY; $y++) {
-                if (isset($matrix[$x][$y])) {
-                    echo $matrix[$x][$y];
-                } else {
-                    echo '.';
-                }
+                    echo isset($matrix[$x][$y]) ? $matrix[$x][$y] : '.';
             }
             echo "\n";
         }
@@ -85,6 +107,7 @@ class CrosswordMaker {
         $crossword = ob_get_contents();
         ob_end_clean();
 
+        // забираємо останній "\n"
         return substr($crossword, 0, -1);
     }
 

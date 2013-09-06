@@ -42,18 +42,12 @@ abstract class BaseTest extends \PHPUnit_Framework_TestCase
 
         $data[0] = [
             [
-                'BURN',
-                'NEWTON',
                 'NOD',
+                'BAA',
                 'YARD',
                 'AIRWAY',
-                'BAA',
-//                'NOD',
-//                'BAA',
-//                'YARD',
-//                'AIRWAY',
-//                'NEWTON',
-//                'BURN',
+                'NEWTON',
+                'BURN',
             ],
             <<<CROSSWORD
 BAA...
@@ -64,7 +58,7 @@ NEWTON
 ..YARD
 CROSSWORD
         ];
-        return $data;
+
         $data[1] = [
             [
                 'AAA',
