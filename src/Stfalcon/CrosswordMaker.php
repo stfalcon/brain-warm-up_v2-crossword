@@ -4,24 +4,25 @@ namespace Stfalcon;
 
 class CrosswordMaker {
 
-    static private $_combinations = array();
-
+    /**
+     * Основний метод генерації кросворду
+     *
+     * @param $words
+     * @return bool|string
+     */
     public function generate($words)
     {
-        self::$_combinations = array();
-
+        // сортуємо масив в порядку спадання довжини слів (щоб виконати умову лексикографічно меншого варіанту)
         usort($words, function($a, $b) {
-            if (strlen($a) == strlen($b)) {
-                return 0;
-            }
-            return (strlen($a) < strlen($b)) ? 1 : -1;
+            return (strlen($a) == strlen($b)) ? 0 : (strlen($a) < strlen($b)) ? 1 : -1;
         });
 
-        self::_bruteForce($words);
+        // генеруємо всі можливі комбінації слів
+        $combinations = self::_generateAllCombinations($words);
 
-        foreach(self::$_combinations as $combination) {
-            $crossword = self::_tryGenerate($combination);
-            if ($crossword) {
+        // послідовно перебираємо варіанти і для кожного пробуємо згенерувати валідний кросворд
+        foreach($combinations as $combination) {
+            if ($crossword = $this->_tryGenerateCrossword($combination)) {
                 return $crossword;
             }
         }
@@ -29,33 +30,52 @@ class CrosswordMaker {
         return false;
     }
 
-    static private function _bruteForce($data, $pos = 0) {
-        if (count($data) == $pos-1) {
-            return false;
-        }
+    /**
+     * Рекурсивний метод генерації усіх можливих комбінацій з вхідного набору слів
+     * (кількість комбінацій = факторіал кількості слів)
+     *
+     * @param $leftWords
+     * @param array $rightWords
+     * @param array $combinations
+     * @return array
+     */
+    static private function _generateAllCombinations($leftWords, $rightWords = array(), &$combinations = array())
+    {
+        if (empty($leftWords)) {
+            // якщо "зліва" слова закінчились, значить є нова комбінація
+            $combinations[] = $rightWords;
+        } else {
+            for ($i = count($leftWords) - 1; $i >= 0; --$i) {
+                $newLeftWords = $leftWords;
+                $newRightWords = $rightWords;
 
-        array_push(self::$_combinations, $data);
+                // переносимо одне з лівих слів в початок масиву правих слів
+                array_unshift($newRightWords, $newLeftWords[$i]);
+                // і прибираємо його з масиву лівих слів
+                array_splice($newLeftWords, $i, 1);
 
-        for($i = $pos; $i < count($data); $i++) {
-            $dataCopy = $data;
-            if (isset($data[$i+1])) {
-                $dataCopy[$pos] = $data[$i+1];
-                $dataCopy[$i+1] = $data[$pos];
+                self::_generateAllCombinations($newLeftWords, $newRightWords, $combinations);
             }
-
-            self::_bruteForce($dataCopy, $pos+1);
         }
+
+        return $combinations;
     }
 
-    static private function _tryGenerate($words) {
-        // напрямок руху по матриці (зміщення для кожного слова)
-        $direction = array(
-            array(+1, 0),
-            array(0, +1),
-            array(+1, 0),
-            array(0, -1),
-            array(-1, 0),
-            array(0, -1),
+    /**
+     * Пробуємо генерувати кросворд у вигляді прямокутної вісімки
+     *
+     * @param $words
+     * @return bool|string
+     */
+    private function _tryGenerateCrossword($words) {
+        // напрямки руху по матриці (зміщення для кожного слов і напрямок тексту в словіа)
+        $directions = array(
+            array('x' => +1, 'y' => 0), // починаємо від [0,0] і йдемо вниз (ліве слово по вертикалі)
+            array('x' => 0, 'y' => +1), // зліва направо (центральне слово по горизонталі)
+            array('x' => +1, 'y' => 0), // зверху вниз (праве слово по вертикалі)
+            array('x' => 0, 'y' => -1), // зправа наліво (нижнє слово по горизонталі)
+            array('x' => -1, 'y' => 0), // знизу вверх (центральне слово по вертикалі)
+            array('x' => 0, 'y' => -1), // зправа наліво (верхнє слово по горизонталі) і повертаємось в [0,0]
         );
 
         $matrix = array();
@@ -66,27 +86,29 @@ class CrosswordMaker {
 
         for($wordId = 0; $wordId < count($words); $wordId++) {
             $word = $words[$wordId];
-            for($letterId = 0; $letterId < strlen($word); $letterId++) {
-                // визначаємо номер літери, яку будемо прописувати в клітину (враховуємо зворотні напрямки)
-                $n = ($direction[$wordId][0] < 0 || $direction[$wordId][1] < 0) ? strlen($word) - ($letterId+1) : $letterId;
-
-                // якщо маршрут закінчився не там де почався (не в точці з координатами [0][0])
-                if ($wordId + 1 == count($words) && $letterId + 1 == strlen($word) && ($x != 0 || $y != 0)) {
+            for($i = 0; $i < strlen($word); $i++) {
+                // якщо маршрут закінчився не там де почався (не в точці з координатами [0,0])
+                if ($wordId + 1 == count($words) && $i + 1 == strlen($word) && ($x != 0 || $y != 0)) {
                     return false;
                 }
 
+                // для напрямків "зправа наліво" чи "знизу вверх" пишемо слова в зворотньому напрямку
+                $reverseDirection = $directions[$wordId]['x'] < 0 || $directions[$wordId]['y'] < 0;
+                // визначаємо номер літери, яку будемо прописувати в клітину (враховуємо напрямок тексту)
+                $letterId = $reverseDirection ? strlen($word) - ($i+1) : $i;
+
                 // якщо в цій клітинці вже є літера, то вони мають співпадати
-                if (isset($matrix[$x][$y]) && $matrix[$x][$y] != $word[$n]) {
+                if (isset($matrix[$x][$y]) && $matrix[$x][$y] != $word[$letterId]) {
                     return false;
                 }
 
                 // проставляємо нову літеру в матрицю
-                $matrix[$x][$y] = $word[$n];
+                $matrix[$x][$y] = $word[$letterId];
 
                 // рахуємо координати наступної літери
-                if ($letterId < strlen($word) - 1) {
-                    $x += $direction[$wordId][0];
-                    $y += $direction[$wordId][1];
+                if ($i < strlen($word) - 1) {
+                    $x += $directions[$wordId]['x'];
+                    $y += $directions[$wordId]['y'];
 
                     // фіксуємо розміри матриці
                     $maxX = $x > $maxX ? $x : $maxX;
@@ -103,7 +125,6 @@ class CrosswordMaker {
             }
             echo "\n";
         }
-
         $crossword = ob_get_contents();
         ob_end_clean();
 
